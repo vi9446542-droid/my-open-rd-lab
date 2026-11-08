@@ -1,0 +1,147 @@
+
+<!DOCTYPE html>
+<html lang="te">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Open R&D AI Lab</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f3f6fb;margin:0;color:#172033}
+header{background:#142b50;color:white;padding:22px 16px}
+header h1{margin:0;font-size:24px}
+header p{margin-bottom:0;color:#d9e6ff}
+main{max-width:850px;margin:20px auto;padding:0 14px}
+.card{background:white;padding:18px;border-radius:12px;margin-bottom:16px;box-shadow:0 2px 9px #0001}
+input,button{box-sizing:border-box;width:100%;padding:13px;margin:7px 0;border-radius:8px;font-size:16px}
+input{border:1px solid #bbc5d4}
+button{border:0;background:#1769d2;color:white;font-weight:bold}
+button:disabled{opacity:.5}
+.result{border-top:1px solid #ddd;padding:14px 0}
+.result h3{margin:4px 0;color:#1455a0}
+.small{font-size:13px;color:#667085}
+.abstract{line-height:1.5;overflow-wrap:anywhere}
+a{color:#1455a0}
+footer{text-align:center;padding:20px;color:#667085}
+</style>
+</head>
+<body>
+<header>
+<h1>Open R&D AI Lab</h1>
+<p>Research • Innovation • Engineering</p>
+</header>
+<main>
+<div class="card">
+<h2>🔬 Research Paper Search</h2>
+<p>మీ Research Topic ఇక్కడ టైప్ చేయండి.</p>
+<input id="query" placeholder="Example: Advanced PPG Sensor">
+<button id="searchBtn" onclick="searchPapers()">Search Research Papers</button>
+<p id="status" class="small">OpenAlex ద్వారా పరిశోధనా పత్రాలు వెతకవచ్చు.</p>
+</div>
+
+<div class="card">
+<h2>📚 Research Results</h2>
+<div id="results">మీ Search Results ఇక్కడ కనిపిస్తాయి.</div>
+</div>
+
+<div class="card">
+<h2>🤖 AI Research Analysis</h2>
+<p>Search చేసిన Papers ఆధారంగా AIకి పంపే ప్రశ్న తయారవుతుంది.</p>
+<button onclick="copyPrompt()">Copy AI Analysis Prompt</button>
+<button onclick="openGemini()">Open Gemini AI</button>
+<p class="small">గమనిక: Promptను Geminiలో మీరు స్వయంగా Paste చేయాలి.</p>
+</div>
+</main>
+<footer>Open R&D AI Lab | Research Prototype Version 1</footer>
+
+<script>
+let papers = [];
+
+async function searchPapers(){
+ const q=document.getElementById("query").value.trim();
+ const status=document.getElementById("status");
+ const results=document.getElementById("results");
+ const btn=document.getElementById("searchBtn");
+
+ if(!q){status.textContent="ముందుగా Research Topic టైప్ చేయండి.";return;}
+
+ btn.disabled=true;
+ status.textContent="Papers వెతుకుతున్నాం...";
+ results.innerHTML="Loading...";
+
+ try{
+  const url="https://api.openalex.org/works?search="+
+    encodeURIComponent(q)+
+    "&per-page=10&select=id,doi,title,publication_year,cited_by_count,authorships,abstract_inverted_index";
+
+  const response=await fetch(url);
+  if(!response.ok) throw new Error("Search failed");
+  const data=await response.json();
+  papers=data.results||[];
+
+  if(!papers.length){
+   results.textContent="Papers దొరకలేదు. మరో Topic ప్రయత్నించండి.";
+  }else{
+   results.innerHTML=papers.map((p,i)=>{
+    const authors=(p.authorships||[])
+      .slice(0,3).map(a=>a.author.display_name).join(", ");
+    let abstract="Abstract అందుబాటులో లేదు.";
+    if(p.abstract_inverted_index){
+     const words=[];
+     for(const [word,positions] of Object.entries(p.abstract_inverted_index)){
+      positions.forEach(pos=>words[pos]=word);
+     }
+     abstract=words.join(" ");
+    }
+    const link=p.doi||p.id;
+    return `<div class="result">
+      <h3>${i+1}. ${escapeHTML(p.title||"Untitled")}</h3>
+      <p class="small">Year: ${p.publication_year||"N/A"} |
+      Citations: ${p.cited_by_count||0}</p>
+      <p class="small">Authors: ${escapeHTML(authors||"Not listed")}</p>
+      <p class="abstract">${escapeHTML(abstract.slice(0,1200))}</p>
+      <a href="${escapeHTML(link)}" target="_blank" rel="noopener">Open Paper / Record</a>
+    </div>`;
+   }).join("");
+  }
+  status.textContent="Search పూర్తయింది. "+papers.length+" Results.";
+ }catch(e){
+  results.textContent="Network సమస్య లేదా Search విఫలమైంది. Internet కనెక్షన్ చూసి మళ్లీ ప్రయత్నించండి.";
+  status.textContent="Error: "+e.message;
+ }finally{
+  btn.disabled=false;
+ }
+}
+
+function escapeHTML(s){
+ return String(s).replace(/[&<>"']/g,c=>({
+ "&":"&amp;","<":"&lt;",">":"&gt;",
+ '"':"&quot;","'":"&#39;"
+ })[c]);
+}
+
+function makePrompt(){
+ let text="నేను ఒక R&D Researcher. క్రింది research papersను తెలుగులో విశ్లేషించండి. ఊహించకుండా ఆధారాలతో సమాధానం ఇవ్వండి.\\n";
+ text+="1. ప్రతి paper ప్రధాన లక్ష్యం\\n2. ఉపయోగించిన పద్ధతులు\\n3. Advantages మరియు Disadvantages\\n4. Research gaps\\n5. కొత్త research అవకాశాలు\\n6. అవసరమైన experiments\\n7. ఆధారాలు లేని విషయాలను స్పష్టంగా గుర్తించండి.\\n\\n";
+ papers.forEach((p,i)=>{
+  text+=`Paper ${i+1}: ${p.title||"Untitled"}\\nYear: ${p.publication_year||"N/A"}\\nOpenAlex: ${p.id}\\n\\n`;
+ });
+ return text;
+}
+
+async function copyPrompt(){
+ if(!papers.length){alert("ముందుగా Papers Search చేయండి.");return;}
+ const text=makePrompt();
+ try{
+  await navigator.clipboard.writeText(text);
+  alert("AI Prompt Copy అయింది. Geminiలో Paste చేయండి.");
+ }catch(e){
+  prompt("ఈ Promptను Copy చేయండి:",text);
+ }
+}
+
+function openGemini(){
+ window.open("https://gemini.google.com/","_blank");
+}
+</script>
+</body>
+</html>
